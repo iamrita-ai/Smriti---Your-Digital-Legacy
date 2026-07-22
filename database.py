@@ -11,6 +11,7 @@ import enum
 from datetime import datetime, timezone
 from typing import Optional
 
+import certifi
 from beanie import Document, PydanticObjectId, init_beanie
 from motor.motor_asyncio import AsyncIOMotorClient
 from pydantic import Field
@@ -128,7 +129,10 @@ _client: Optional[AsyncIOMotorClient] = None
 async def init_db() -> None:
     """Call once at startup (from main.py's post_init) before any queries run."""
     global _client
-    _client = AsyncIOMotorClient(config.MONGODB_URI)
+    # tlsCAFile=certifi.where() avoids TLS handshake failures against MongoDB
+    # Atlas that can happen in minimal Docker images with an incomplete/old
+    # system CA bundle (a common issue on Render/Railway/Heroku-style hosts).
+    _client = AsyncIOMotorClient(config.MONGODB_URI, tlsCAFile=certifi.where())
     db = _client[config.MONGODB_DB_NAME]
     await init_beanie(
         database=db,
