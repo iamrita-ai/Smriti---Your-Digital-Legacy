@@ -1,6 +1,9 @@
 """
 /addcapsule conversation:
 1. Send the content itself (text / voice / photo / document / video)
+   -> if LOG_CHANNEL_ID is configured, media is immediately copied into
+      that private channel for durable long-term storage, and we keep
+      the channel message_id instead of relying on the raw file_id.
 2. Choose a trigger: on_death, on_date, on_age, manual
 3. Choose the heir it belongs to
 4. Optionally set an "emotional password" question+answer
@@ -14,6 +17,7 @@ from telegram.ext import (
     CallbackQueryHandler, filters,
 )
 
+import config
 from database import User, Heir, Capsule, CapsuleType, TriggerType
 import encryption
 
@@ -52,6 +56,33 @@ async def addcapsule_content(update: Update, context: ContextTypes.DEFAULT_TYPE)
         data["type"] = CapsuleType.TEXT
         data["file_id"] = None
         data["text"] = msg.text or ""
+
+    # Show a "processing" GIF while we mirror the media into the log channel.
+    if config.PROCESSING_GIF and data["type"] != CapsuleType.TEXT:
+        try:
+            await context.bot.send_animation(
+                chat_id=update.effective_chat.id,
+                animation=config.PROCESSING_GIF,
+                caption="⏳ Securely processing your capsule...",
+            )
+        except Exception:
+            pass  # cosmetic only - never let a bad GIF url break the flow
+
+    # Durable storage: copy media into the private log channel if configured.
+    if config.LOG_CHANNEL_ID and data["type"] != CapsuleType.TEXT:
+        try:
+            copied = await context.bot.copy_message(
+                chat_id=config.LOG_CHANNEL_ID,
+                from_chat_id=update.effective_chat.id,
+                message_id=msg.message_id,
+            )
+            data["log_channel_message_id"] = copied.message_id
+        except Exception:
+            # Channel not configured correctly / bot not admin there yet -
+            # fall back to the raw file_id so the flow still works.
+            data["log_channel_message_id"] = None
+    else:
+        data["log_channel_message_id"] = None
 
     keyboard = [
         [InlineKeyboardButton("💀 Dead Man's Switch", callback_data="trigger:on_death")],
@@ -197,6 +228,7 @@ async def _save_capsule(update: Update, context: ContextTypes.DEFAULT_TYPE, via_
         heir_id=data.get("heir_id"),
         capsule_type=data["type"],
         file_id=data.get("file_id"),
+        log_channel_message_id=data.get("log_channel_message_id"),
         encrypted_text=encryption.encrypt(data.get("text", "")) if data.get("text") else None,
         trigger_type=data["trigger_type"],
         trigger_date=data.get("trigger_date"),

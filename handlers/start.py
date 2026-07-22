@@ -22,8 +22,17 @@ HELP_TEXT = f"""👋 Main hoon *{config.BOT_DISPLAY_NAME}* — aapki digital leg
 """
 
 
+async def _send_start_gif(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if config.START_GIF:
+        try:
+            await context.bot.send_animation(chat_id=update.effective_chat.id, animation=config.START_GIF)
+        except Exception:
+            pass  # cosmetic only - never let a bad GIF url break onboarding
+
+
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     tg_user = update.effective_user
+    await _send_start_gif(update, context)
     user, created = await get_or_create_user(tg_user.id, tg_user.username, tg_user.full_name)
     if created:
         await update.message.reply_text(
