@@ -78,7 +78,8 @@ class Capsule(Document):
     heir_id: Optional[PydanticObjectId] = None
 
     capsule_type: CapsuleType
-    file_id: Optional[str] = None
+    file_id: Optional[str] = None  # fallback if LOG_CHANNEL_ID isn't configured
+    log_channel_message_id: Optional[int] = None  # preferred: message_id in the log channel
     encrypted_text: Optional[str] = None
 
     trigger_type: TriggerType

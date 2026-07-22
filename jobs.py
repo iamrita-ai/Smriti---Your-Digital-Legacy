@@ -139,9 +139,28 @@ async def deliver_capsule(context, capsule: Capsule):
 
     caption = encryption.decrypt(capsule.encrypted_text) if capsule.encrypted_text else None
     ctype = capsule.capsule_type.value
+
     if ctype == "text":
         await context.bot.send_message(chat_id=heir.telegram_id, text=caption or "(empty memory)")
-    elif ctype == "voice":
+        capsule.delivered = True
+        await capsule.save()
+        return
+
+    # Preferred path: media lives in the private log channel -> copy_message
+    # re-delivers it fresh, regardless of how old the original file_id is.
+    if capsule.log_channel_message_id and config.LOG_CHANNEL_ID:
+        await context.bot.copy_message(
+            chat_id=heir.telegram_id,
+            from_chat_id=config.LOG_CHANNEL_ID,
+            message_id=capsule.log_channel_message_id,
+            caption=caption,
+        )
+        capsule.delivered = True
+        await capsule.save()
+        return
+
+    # Fallback path: no log channel configured at save-time, use the raw file_id.
+    if ctype == "voice":
         await context.bot.send_voice(chat_id=heir.telegram_id, voice=capsule.file_id, caption=caption)
     elif ctype == "photo":
         await context.bot.send_photo(chat_id=heir.telegram_id, photo=capsule.file_id, caption=caption)
