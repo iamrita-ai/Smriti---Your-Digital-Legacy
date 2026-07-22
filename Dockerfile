@@ -2,8 +2,11 @@ FROM python:3.11-slim
 
 WORKDIR /app
 
+# ca-certificates is REQUIRED for TLS handshakes to MongoDB Atlas to succeed
+# inside this slim image - without it you get SSL handshake failures.
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    gcc \
+    gcc ca-certificates \
+    && update-ca-certificates \
     && rm -rf /var/lib/apt/lists/*
 
 COPY requirements.txt .
